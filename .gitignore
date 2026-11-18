@@ -1,0 +1,26 @@
+# Java / Maven / Gradle
+target/
+build/
+.gradle/
+*.class
+# Mule / Anypoint Studio
+.mule/
+.settings/
+.classpath
+.project
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.example.tfvars
+# Bicep build output
+*.json.bak
+# IDE and OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+# Local secrets
+.env
+*.env

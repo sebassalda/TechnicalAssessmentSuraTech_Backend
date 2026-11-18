@@ -1,0 +1,363 @@
+diff --git a/src/main/java/com/meridian/payments/cl/AustralNotification.java b/src/main/java/com/meridian/payments/cl/AustralNotification.java
+new file mode 100644
+index 0000000..5360b82
+--- /dev/null
++++ b/src/main/java/com/meridian/payments/cl/AustralNotification.java
+@@ -0,0 +1,23 @@
++package com.meridian.payments.cl;
++
++public record AustralNotification(
++        String eventId,
++        String eventType,
++        String sentAt,
++        Payment payment) {
++
++    public record Payment(
++            String paymentId,
++            double amount,
++            String currency,
++            String policyNumber,
++            String occurredAt,
++            Payer payer) {
++    }
++
++    public record Payer(
++            String name,
++            String rut,
++            String email) {
++    }
++}
+diff --git a/src/main/java/com/meridian/payments/cl/AustralPaymentService.java b/src/main/java/com/meridian/payments/cl/AustralPaymentService.java
+new file mode 100644
+index 0000000..02ff04d
+--- /dev/null
++++ b/src/main/java/com/meridian/payments/cl/AustralPaymentService.java
+@@ -0,0 +1,71 @@
++package com.meridian.payments.cl;
++
++import java.math.BigDecimal;
++import java.time.Instant;
++import java.util.Optional;
++
++import org.slf4j.Logger;
++import org.slf4j.LoggerFactory;
++import org.springframework.stereotype.Service;
++import org.springframework.transaction.annotation.Transactional;
++
++import com.meridian.payments.persistence.ProcessedNotification;
++import com.meridian.payments.persistence.ProcessedNotificationRepository;
++import com.meridian.payments.salesforce.PremiumPaymentRecord;
++import com.meridian.payments.salesforce.SalesforceClient;
++
++@Service
++public class AustralPaymentService {
++
++    private static final Logger log = LoggerFactory.getLogger(AustralPaymentService.class);
++    private static final String PROVIDER = "Austral";
++
++    private final ProcessedNotificationRepository processedNotifications;
++    private final SalesforceClient salesforceClient;
++
++    public AustralPaymentService(ProcessedNotificationRepository processedNotifications,
++                                 SalesforceClient salesforceClient) {
++        this.processedNotifications = processedNotifications;
++        this.salesforceClient = salesforceClient;
++    }
++
++    @Transactional
++    public void process(AustralNotification notification) {
++        try {
++            if (processedNotifications.existsById(notification.eventId())) {
++                log.info("Duplicate Austral event {}, skipping", notification.eventId());
++                return;
++            }
++
++            AustralNotification.Payment payment = notification.payment();
++            String status = mapStatus(notification.eventType());
++
++            Optional<String> existingPaymentId = salesforceClient.findPaymentId(PROVIDER, payment.paymentId());
++            if (existingPaymentId.isPresent()) {
++                salesforceClient.updatePaymentStatus(existingPaymentId.get(), status);
++            } else {
++                salesforceClient.createPayment(new PremiumPaymentRecord(
++                        payment.policyNumber(),
++                        BigDecimal.valueOf(Math.round(payment.amount() * 100) / 100.0),
++                        payment.currency(),
++                        status,
++                        PROVIDER,
++                        payment.paymentId(),
++                        Instant.parse(payment.occurredAt())));
++            }
++
++            processedNotifications.save(new ProcessedNotification(notification.eventId(), Instant.now()));
++        } catch (Exception e) {
++            log.error("Error processing Austral event " + notification.eventId(), e);
++        }
++    }
++
++    private String mapStatus(String eventType) {
++        return switch (eventType) {
++            case "PAYMENT_CONFIRMED" -> "Captured";
++            case "PAYMENT_REJECTED" -> "Failed";
++            case "PAYMENT_REVERSED" -> "Refunded";
++            default -> "Pending";
++        };
++    }
++}
+diff --git a/src/main/java/com/meridian/payments/cl/AustralSignatureVerifier.java b/src/main/java/com/meridian/payments/cl/AustralSignatureVerifier.java
+new file mode 100644
+index 0000000..557a7d9
+--- /dev/null
++++ b/src/main/java/com/meridian/payments/cl/AustralSignatureVerifier.java
+@@ -0,0 +1,31 @@
++package com.meridian.payments.cl;
++
++import java.nio.charset.StandardCharsets;
++import java.util.HexFormat;
++
++import javax.crypto.Mac;
++import javax.crypto.spec.SecretKeySpec;
++
++import org.springframework.beans.factory.annotation.Value;
++import org.springframework.stereotype.Component;
++
++@Component
++public class AustralSignatureVerifier {
++
++    private final String secret;
++
++    public AustralSignatureVerifier(@Value("${austral.webhook-secret}") String secret) {
++        this.secret = secret;
++    }
++
++    public boolean isValid(String payload, String signature) {
++        try {
++            Mac mac = Mac.getInstance("HmacSHA256");
++            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
++            String expected = HexFormat.of().formatHex(mac.doFinal(payload.getBytes(StandardCharsets.UTF_8)));
++            return expected.equals(signature);
++        } catch (Exception e) {
++            return false;
++        }
++    }
++}
+diff --git a/src/main/java/com/meridian/payments/cl/AustralWebhookController.java b/src/main/java/com/meridian/payments/cl/AustralWebhookController.java
+new file mode 100644
+index 0000000..178bbd7
+--- /dev/null
++++ b/src/main/java/com/meridian/payments/cl/AustralWebhookController.java
+@@ -0,0 +1,57 @@
++package com.meridian.payments.cl;
++
++import java.util.concurrent.Executor;
++
++import org.slf4j.Logger;
++import org.slf4j.LoggerFactory;
++import org.springframework.beans.factory.annotation.Qualifier;
++import org.springframework.http.HttpStatus;
++import org.springframework.http.ResponseEntity;
++import org.springframework.web.bind.annotation.PostMapping;
++import org.springframework.web.bind.annotation.RequestBody;
++import org.springframework.web.bind.annotation.RequestHeader;
++import org.springframework.web.bind.annotation.RequestMapping;
++import org.springframework.web.bind.annotation.RestController;
++
++import com.fasterxml.jackson.databind.ObjectMapper;
++
++@RestController
++@RequestMapping("/webhooks/austral")
++public class AustralWebhookController {
++
++    private static final Logger log = LoggerFactory.getLogger(AustralWebhookController.class);
++
++    private final AustralSignatureVerifier verifier;
++    private final AustralPaymentService paymentService;
++    private final ObjectMapper objectMapper;
++    private final Executor executor;
++
++    public AustralWebhookController(AustralSignatureVerifier verifier,
++                                    AustralPaymentService paymentService,
++                                    ObjectMapper objectMapper,
++                                    @Qualifier("australExecutor") Executor executor) {
++        this.verifier = verifier;
++        this.paymentService = paymentService;
++        this.objectMapper = objectMapper;
++        this.executor = executor;
++    }
++
++    @PostMapping
++    public ResponseEntity<Void> receive(@RequestBody String body,
++                                        @RequestHeader(value = "X-Austral-Signature", required = false) String signature)
++            throws Exception {
++
++        if (signature != null && !verifier.isValid(body, signature)) {
++            log.warn("Invalid Austral signature");
++            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
++        }
++
++        AustralNotification notification = objectMapper.readValue(body, AustralNotification.class);
++        log.info("Austral notification received: {}", notification);
++
++        // Process asynchronously so Austral gets a fast response
++        executor.execute(() -> paymentService.process(notification));
++
++        return ResponseEntity.ok().build();
++    }
++}
+diff --git a/src/main/java/com/meridian/payments/config/AsyncConfig.java b/src/main/java/com/meridian/payments/config/AsyncConfig.java
+new file mode 100644
+index 0000000..5273da5
+--- /dev/null
++++ b/src/main/java/com/meridian/payments/config/AsyncConfig.java
+@@ -0,0 +1,16 @@
++package com.meridian.payments.config;
++
++import java.util.concurrent.Executor;
++import java.util.concurrent.Executors;
++
++import org.springframework.context.annotation.Bean;
++import org.springframework.context.annotation.Configuration;
++
++@Configuration
++public class AsyncConfig {
++
++    @Bean
++    public Executor australExecutor() {
++        return Executors.newFixedThreadPool(4);
++    }
++}
+diff --git a/src/main/java/com/meridian/payments/persistence/ProcessedNotification.java b/src/main/java/com/meridian/payments/persistence/ProcessedNotification.java
+new file mode 100644
+index 0000000..3e26f13
+--- /dev/null
++++ b/src/main/java/com/meridian/payments/persistence/ProcessedNotification.java
+@@ -0,0 +1,33 @@
++package com.meridian.payments.persistence;
++
++import java.time.Instant;
++
++import jakarta.persistence.Entity;
++import jakarta.persistence.Id;
++import jakarta.persistence.Table;
++
++@Entity
++@Table(name = "processed_notification")
++public class ProcessedNotification {
++
++    @Id
++    private String eventId;
++
++    private Instant processedAt;
++
++    protected ProcessedNotification() {
++    }
++
++    public ProcessedNotification(String eventId, Instant processedAt) {
++        this.eventId = eventId;
++        this.processedAt = processedAt;
++    }
++
++    public String getEventId() {
++        return eventId;
++    }
++
++    public Instant getProcessedAt() {
++        return processedAt;
++    }
++}
+diff --git a/src/main/java/com/meridian/payments/persistence/ProcessedNotificationRepository.java b/src/main/java/com/meridian/payments/persistence/ProcessedNotificationRepository.java
+new file mode 100644
+index 0000000..e0c9855
+--- /dev/null
++++ b/src/main/java/com/meridian/payments/persistence/ProcessedNotificationRepository.java
+@@ -0,0 +1,6 @@
++package com.meridian.payments.persistence;
++
++import org.springframework.data.jpa.repository.JpaRepository;
++
++public interface ProcessedNotificationRepository extends JpaRepository<ProcessedNotification, String> {
++}
+diff --git a/src/main/resources/application.yml b/src/main/resources/application.yml
+index 7aa0453..cc8acaf 100644
+--- a/src/main/resources/application.yml
++++ b/src/main/resources/application.yml
+@@ -14,3 +14,6 @@ salesforce:
+   api-version: ${SALESFORCE_API_VERSION}
+   client-id: ${SALESFORCE_CLIENT_ID}
+   client-secret: ${SALESFORCE_CLIENT_SECRET}
++
++austral:
++  webhook-secret: "aus_live_whsec_8KfQ2mZx7RtV4pLs"
+diff --git a/src/test/java/com/meridian/payments/cl/AustralPaymentServiceTest.java b/src/test/java/com/meridian/payments/cl/AustralPaymentServiceTest.java
+new file mode 100644
+index 0000000..8222e11
+--- /dev/null
++++ b/src/test/java/com/meridian/payments/cl/AustralPaymentServiceTest.java
+@@ -0,0 +1,67 @@
++package com.meridian.payments.cl;
++
++import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
++import static org.junit.jupiter.api.Assertions.assertNotNull;
++import static org.mockito.ArgumentMatchers.any;
++import static org.mockito.Mockito.atMost;
++import static org.mockito.Mockito.verify;
++import static org.mockito.Mockito.when;
++
++import org.junit.jupiter.api.Test;
++import org.junit.jupiter.api.extension.ExtendWith;
++import org.mockito.InjectMocks;
++import org.mockito.Mock;
++import org.mockito.junit.jupiter.MockitoExtension;
++
++import com.meridian.payments.persistence.ProcessedNotificationRepository;
++import com.meridian.payments.salesforce.SalesforceClient;
++
++@ExtendWith(MockitoExtension.class)
++class AustralPaymentServiceTest {
++
++    @Mock
++    private ProcessedNotificationRepository processedNotifications;
++
++    @Mock
++    private SalesforceClient salesforceClient;
++
++    @InjectMocks
++    private AustralPaymentService service;
++
++    @Test
++    void shouldProcessNotification() {
++        service.process(sampleNotification());
++
++        assertNotNull(service);
++    }
++
++    @Test
++    void shouldHandleDuplicates() {
++        when(processedNotifications.existsById(any())).thenReturn(true);
++
++        service.process(sampleNotification());
++
++        verify(salesforceClient, atMost(1)).createPayment(any());
++    }
++
++    @Test
++    void shouldHandleErrors() {
++        when(salesforceClient.findPaymentId(any(), any())).thenThrow(new RuntimeException("Salesforce down"));
++
++        assertDoesNotThrow(() -> service.process(sampleNotification()));
++    }
++
++    private AustralNotification sampleNotification() {
++        return new AustralNotification(
++                "aus_ev_93f0c1d2",
++                "PAYMENT_CONFIRMED",
++                "2026-11-28T17:05:44Z",
++                new AustralNotification.Payment(
++                        "AUS-P-77120",
++                        45990,
++                        "CLP",
++                        "POL-CL-000093311",
++                        "2026-11-28T17:05:40Z",
++                        new AustralNotification.Payer("Camila Rojas", "11.111.111-1", "camila.rojas@example.com")));
++    }
++}
