@@ -1,40 +1,66 @@
-name: CD - promotion design (non-deploying)
+
+name: CD - Promotion Dry Run
+
 on:
+  push:
+    branches:
+      - develop
+    paths:
+      - ".github/workflows/cd.yml"
   workflow_dispatch:
+
 permissions:
   contents: read
-  id-token: write
+
 concurrency:
   group: part-c-promotion
   cancel-in-progress: false
+
 jobs:
   dev:
-    if: ${{ false }} # Part C expressly forbids deployment; enable only after authorized production readiness review.
+    name: DEV - Simulated deployment
     runs-on: ubuntu-latest
-    environment: dev
+
+    outputs:
+      artifact_sha: ${{ steps.artifact.outputs.sha }}
+
     steps:
-      - uses: actions/checkout@v4
-      - name: Authenticate to Azure with OIDC
-        uses: azure/login@v2
-        with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-      - name: Planned promotion controls
-        run: echo 'Review Terraform plan, immutable image digest, SBOM, tests, and smoke checks before an authorized deployment.'
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Identify immutable artifact
+        id: artifact
+        run: |
+          echo "sha=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Simulate DEV deployment
+        run: |
+          echo "Environment: DEV"
+          echo "Artifact: ${{ steps.artifact.outputs.sha }}"
+          echo "DRY RUN - No Azure deployment"
+
   test:
-    if: ${{ false }}
+    name: TEST - Promotion validation
     needs: dev
     runs-on: ubuntu-latest
-    environment: test
+
     steps:
-      - name: Planned integration gates
-        run: echo 'Require dev approval, test environment approval, integration tests, replay and rollback review.'
+      - name: Validate artifact
+        run: |
+          echo "Environment: TEST"
+          echo "Artifact: ${{ needs.dev.outputs.artifact_sha }}"
+          test -n "${{ needs.dev.outputs.artifact_sha }}"
+          echo "DRY RUN - Promotion validated"
+
   prod:
-    if: ${{ false }}
+    name: PROD - Promotion validation
     needs: test
     runs-on: ubuntu-latest
-    environment: prod
+
     steps:
-      - name: Planned production gates
-        run: echo 'Require protected production approval, change record, reviewed plan, monitored rollout and rollback.'
+      - name: Validate production promotion
+        run: |
+          echo "Environment: PROD"
+          echo "Artifact: ${{ github.sha }}"
+          echo "DRY RUN - No production deployment"
+          echo "Promotion simulation completed"
