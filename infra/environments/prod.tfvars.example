@@ -1,0 +1,6 @@
+environment = "prod"
+country = "co"
+location = "eastus2"
+subscription_id = "00000000-0000-0000-0000-000000000000"
+container_registry_server = "example.azurecr.io"
+container_image = "example.azurecr.io/payment-intake@sha256:REPLACE_WITH_DIGEST"

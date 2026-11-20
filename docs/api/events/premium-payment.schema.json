@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://meridian.example/schemas/premium-payment/1.0",
+  "title": "Premium Payment Event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "eventId",
+    "schemaVersion",
+    "eventType",
+    "provider",
+    "country",
+    "providerEventId",
+    "providerPaymentId",
+    "paymentKey",
+    "idempotencyKey",
+    "policyReference",
+    "status",
+    "originalStatus",
+    "amount",
+    "occurredAt",
+    "receivedAt",
+    "correlationId"
+  ],
+  "properties": {
+    "eventId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "schemaVersion": {
+      "const": "1.0"
+    },
+    "eventType": {
+      "const": "premium.payment.updated"
+    },
+    "provider": {
+      "enum": [
+        "Quetzal",
+        "Andina",
+        "Austral"
+      ]
+    },
+    "country": {
+      "enum": [
+        "MX",
+        "CO",
+        "CL"
+      ]
+    },
+    "providerEventId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "providerPaymentId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "paymentKey": {
+      "type": "string",
+      "minLength": 1
+    },
+    "idempotencyKey": {
+      "type": "string",
+      "minLength": 1
+    },
+    "policyReference": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "enum": [
+        "Pending",
+        "Captured",
+        "Failed",
+        "Refunded"
+      ]
+    },
+    "originalStatus": {
+      "type": "string",
+      "minLength": 1
+    },
+    "amount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "currency"
+      ],
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "^\\d+(\\.\\d{1,2})?$"
+        },
+        "currency": {
+          "enum": [
+            "MXN",
+            "COP",
+            "CLP"
+          ]
+        }
+      }
+    },
+    "occurredAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "receivedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "correlationId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "refundedAmount": {
+          "type": "string",
+          "pattern": "^\\d+(\\.\\d{1,2})?$"
+        },
+        "reasonCode": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

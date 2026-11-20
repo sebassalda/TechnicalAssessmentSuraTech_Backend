@@ -1,0 +1,23 @@
+{
+  "id": "evt_01JDQ3K8M2X7",
+  "type": "charge.succeeded",
+  "api_version": "2025-06-01",
+  "created": 1795888800,
+  "data": {
+    "charge": {
+      "id": "ch_7Hk2Lm9QpZ",
+      "amount": 125000,
+      "currency": "mxn",
+      "status": "succeeded",
+      "reference": "POL-MX-000412785",
+      "paid_at": 1795888796,
+      "payment_method": {
+        "type": "card",
+        "token": "tok_qz_9sD2fK"
+      },
+      "customer": {
+        "email": "maria.lopez@example.com"
+      }
+    }
+  }
+}

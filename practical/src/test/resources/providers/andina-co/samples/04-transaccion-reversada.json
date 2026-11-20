@@ -1,0 +1,19 @@
+{
+  "notificacion_id": "ntf-e7a40f58",
+  "fecha_notificacion": "2026-12-03T09:15:42-05:00",
+  "transaccion": {
+    "id": "TRX-CO-5521907",
+    "estado": "REVERSADA",
+    "valor": "185000.00",
+    "moneda": "COP",
+    "referencia": "POL-CO-000187342",
+    "medio_pago": "PSE",
+    "fecha_transaccion": "2026-12-03T09:15:40-05:00",
+    "motivo_reverso": "SOLICITUD_BANCO",
+    "pagador": {
+      "nombre": "Laura Gómez",
+      "documento": "CC 1020304050",
+      "correo": "laura.gomez@example.com"
+    }
+  }
+}

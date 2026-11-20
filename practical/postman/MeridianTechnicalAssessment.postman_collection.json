@@ -1,0 +1,356 @@
+{
+  "info": {
+    "name": "Meridian Part B — Local Webhooks",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Local-only testing. Requires Postman supporting pm.require npm:crypto-js@4.2.0. Exact provider samples; dynamically signs raw request body."
+  },
+  "item": [
+    {
+      "name": "Quetzal — 01-charge-succeeded.json",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const CryptoJS = require('crypto-js');",
+              "const t = Math.floor(Date.now()/1000).toString();",
+              "const raw = pm.request.body.raw;",
+              "const hmac = CryptoJS.HmacSHA256(t+'.'+raw, pm.environment.get('quetzalSecret')).toString(CryptoJS.enc.Hex);",
+              "pm.request.headers.upsert({key:'Quetzal-Signature',value:'t='+t+',v1='+hmac});"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Accepted or exact duplicate\", function () { pm.expect(pm.response.code).to.eql(200); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": \"evt_01JDQ3K8M2X7\",\n  \"type\": \"charge.succeeded\",\n  \"api_version\": \"2025-06-01\",\n  \"created\": 1795888800,\n  \"data\": {\n    \"charge\": {\n      \"id\": \"ch_7Hk2Lm9QpZ\",\n      \"amount\": 125000,\n      \"currency\": \"mxn\",\n      \"status\": \"succeeded\",\n      \"reference\": \"POL-MX-000412785\",\n      \"paid_at\": 1795888796,\n      \"payment_method\": {\n        \"type\": \"card\",\n        \"token\": \"tok_qz_9sD2fK\"\n      },\n      \"customer\": {\n        \"email\": \"maria.lopez@example.com\"\n      }\n    }\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "{{baseUrl}}/api/v1/webhooks/quetzal"
+      }
+    },
+    {
+      "name": "Quetzal — 02-charge-failed.json",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const CryptoJS = require('crypto-js');",
+              "const t = Math.floor(Date.now()/1000).toString();",
+              "const raw = pm.request.body.raw;",
+              "const hmac = CryptoJS.HmacSHA256(t+'.'+raw, pm.environment.get('quetzalSecret')).toString(CryptoJS.enc.Hex);",
+              "pm.request.headers.upsert({key:'Quetzal-Signature',value:'t='+t+',v1='+hmac});"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Accepted or exact duplicate\", function () { pm.expect(pm.response.code).to.eql(200); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": \"evt_01JDQ3P1C9T4\",\n  \"type\": \"charge.failed\",\n  \"api_version\": \"2025-06-01\",\n  \"created\": 1795889400,\n  \"data\": {\n    \"charge\": {\n      \"id\": \"ch_8Jm3Np0RqA\",\n      \"amount\": 98000,\n      \"currency\": \"mxn\",\n      \"status\": \"failed\",\n      \"failure_code\": \"insufficient_funds\",\n      \"reference\": \"POL-MX-000398110\",\n      \"paid_at\": null,\n      \"payment_method\": {\n        \"type\": \"card\",\n        \"token\": \"tok_qz_1aB7cD\"\n      },\n      \"customer\": {\n        \"email\": \"jorge.ramirez@example.com\"\n      }\n    }\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "{{baseUrl}}/api/v1/webhooks/quetzal"
+      }
+    },
+    {
+      "name": "Quetzal — 03-charge-refunded.json",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const CryptoJS = require('crypto-js');",
+              "const t = Math.floor(Date.now()/1000).toString();",
+              "const raw = pm.request.body.raw;",
+              "const hmac = CryptoJS.HmacSHA256(t+'.'+raw, pm.environment.get('quetzalSecret')).toString(CryptoJS.enc.Hex);",
+              "pm.request.headers.upsert({key:'Quetzal-Signature',value:'t='+t+',v1='+hmac});"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Accepted or exact duplicate\", function () { pm.expect(pm.response.code).to.eql(200); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": \"evt_01JDQ9W4R6Y2\",\n  \"type\": \"charge.refunded\",\n  \"api_version\": \"2025-06-01\",\n  \"created\": 1795975200,\n  \"data\": {\n    \"charge\": {\n      \"id\": \"ch_7Hk2Lm9QpZ\",\n      \"amount\": 125000,\n      \"amount_refunded\": 125000,\n      \"currency\": \"mxn\",\n      \"status\": \"refunded\",\n      \"reference\": \"POL-MX-000412785\",\n      \"paid_at\": 1795888796,\n      \"refunded_at\": 1795975195,\n      \"payment_method\": {\n        \"type\": \"card\",\n        \"token\": \"tok_qz_9sD2fK\"\n      },\n      \"customer\": {\n        \"email\": \"maria.lopez@example.com\"\n      }\n    }\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "{{baseUrl}}/api/v1/webhooks/quetzal"
+      }
+    },
+    {
+      "name": "Andina — 01-transaccion-pendiente.json",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const CryptoJS = require('crypto-js');",
+              "const ts = new Date().toISOString();",
+              "const raw = pm.request.body.raw;",
+              "const hmac = CryptoJS.HmacSHA256(ts+'.'+raw, pm.environment.get('andinaSecret')).toString(CryptoJS.enc.Base64);",
+              "pm.request.headers.upsert({key:'X-Andina-Timestamp',value:ts});",
+              "pm.request.headers.upsert({key:'X-Andina-Signature',value:hmac});"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Accepted or exact duplicate\", function () { pm.expect(pm.response.code).to.eql(200); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"notificacion_id\": \"ntf-5b81e0c4\",\n  \"fecha_notificacion\": \"2026-11-28T14:02:59-05:00\",\n  \"transaccion\": {\n    \"id\": \"TRX-CO-5521907\",\n    \"estado\": \"PENDIENTE\",\n    \"valor\": \"185000.00\",\n    \"moneda\": \"COP\",\n    \"referencia\": \"POL-CO-000187342\",\n    \"medio_pago\": \"PSE\",\n    \"fecha_transaccion\": \"2026-11-28T14:02:58-05:00\",\n    \"pagador\": {\n      \"nombre\": \"Laura Gómez\",\n      \"documento\": \"CC 1020304050\",\n      \"correo\": \"laura.gomez@example.com\"\n    }\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "{{baseUrl}}/api/v1/webhooks/andina"
+      }
+    },
+    {
+      "name": "Andina — 02-transaccion-aprobada.json",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const CryptoJS = require('crypto-js');",
+              "const ts = new Date().toISOString();",
+              "const raw = pm.request.body.raw;",
+              "const hmac = CryptoJS.HmacSHA256(ts+'.'+raw, pm.environment.get('andinaSecret')).toString(CryptoJS.enc.Base64);",
+              "pm.request.headers.upsert({key:'X-Andina-Timestamp',value:ts});",
+              "pm.request.headers.upsert({key:'X-Andina-Signature',value:hmac});"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Accepted or exact duplicate\", function () { pm.expect(pm.response.code).to.eql(200); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"notificacion_id\": \"ntf-8f1c2a77\",\n  \"fecha_notificacion\": \"2026-11-28T14:03:11-05:00\",\n  \"transaccion\": {\n    \"id\": \"TRX-CO-5521907\",\n    \"estado\": \"APROBADA\",\n    \"valor\": \"185000.00\",\n    \"moneda\": \"COP\",\n    \"referencia\": \"POL-CO-000187342\",\n    \"medio_pago\": \"PSE\",\n    \"fecha_transaccion\": \"2026-11-28T14:03:09-05:00\",\n    \"pagador\": {\n      \"nombre\": \"Laura Gómez\",\n      \"documento\": \"CC 1020304050\",\n      \"correo\": \"laura.gomez@example.com\"\n    }\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "{{baseUrl}}/api/v1/webhooks/andina"
+      }
+    },
+    {
+      "name": "Andina — 03-transaccion-aprobada-reintento.json",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const CryptoJS = require('crypto-js');",
+              "const ts = new Date().toISOString();",
+              "const raw = pm.request.body.raw;",
+              "const hmac = CryptoJS.HmacSHA256(ts+'.'+raw, pm.environment.get('andinaSecret')).toString(CryptoJS.enc.Base64);",
+              "pm.request.headers.upsert({key:'X-Andina-Timestamp',value:ts});",
+              "pm.request.headers.upsert({key:'X-Andina-Signature',value:hmac});"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Accepted or exact duplicate\", function () { pm.expect(pm.response.code).to.eql(200); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"notificacion_id\": \"ntf-c02d9e13\",\n  \"fecha_notificacion\": \"2026-11-28T14:08:11-05:00\",\n  \"transaccion\": {\n    \"id\": \"TRX-CO-5521907\",\n    \"estado\": \"APROBADA\",\n    \"valor\": \"185000.00\",\n    \"moneda\": \"COP\",\n    \"referencia\": \"POL-CO-000187342\",\n    \"medio_pago\": \"PSE\",\n    \"fecha_transaccion\": \"2026-11-28T14:03:09-05:00\",\n    \"pagador\": {\n      \"nombre\": \"Laura Gómez\",\n      \"documento\": \"CC 1020304050\",\n      \"correo\": \"laura.gomez@example.com\"\n    }\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "{{baseUrl}}/api/v1/webhooks/andina"
+      }
+    },
+    {
+      "name": "Andina — 04-transaccion-reversada.json",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const CryptoJS = require('crypto-js');",
+              "const ts = new Date().toISOString();",
+              "const raw = pm.request.body.raw;",
+              "const hmac = CryptoJS.HmacSHA256(ts+'.'+raw, pm.environment.get('andinaSecret')).toString(CryptoJS.enc.Base64);",
+              "pm.request.headers.upsert({key:'X-Andina-Timestamp',value:ts});",
+              "pm.request.headers.upsert({key:'X-Andina-Signature',value:hmac});"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Accepted or exact duplicate\", function () { pm.expect(pm.response.code).to.eql(200); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"notificacion_id\": \"ntf-e7a40f58\",\n  \"fecha_notificacion\": \"2026-12-03T09:15:42-05:00\",\n  \"transaccion\": {\n    \"id\": \"TRX-CO-5521907\",\n    \"estado\": \"REVERSADA\",\n    \"valor\": \"185000.00\",\n    \"moneda\": \"COP\",\n    \"referencia\": \"POL-CO-000187342\",\n    \"medio_pago\": \"PSE\",\n    \"fecha_transaccion\": \"2026-12-03T09:15:40-05:00\",\n    \"motivo_reverso\": \"SOLICITUD_BANCO\",\n    \"pagador\": {\n      \"nombre\": \"Laura Gómez\",\n      \"documento\": \"CC 1020304050\",\n      \"correo\": \"laura.gomez@example.com\"\n    }\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "{{baseUrl}}/api/v1/webhooks/andina"
+      }
+    },
+    {
+      "name": "Local — status",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/local/status"
+      }
+    },
+    {
+      "name": "Local — dispatch pending",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/local/dispatch"
+      }
+    },
+    {
+      "name": "Local — simulate broker failure",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/local/broker/fail-next"
+      }
+    }
+  ]
+}

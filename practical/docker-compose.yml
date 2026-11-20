@@ -1,0 +1,18 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: meridian_intake
+      POSTGRES_USER: meridian
+      POSTGRES_PASSWORD: local_only_password
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - intake_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U meridian -d meridian_intake"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+volumes:
+  intake_pgdata:

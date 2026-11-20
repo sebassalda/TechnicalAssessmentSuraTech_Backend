@@ -1,0 +1,68 @@
+
+
+name: CD - Promotion Dry Run
+
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - ".github/workflows/cd-dry-run.yml"
+      - ".github/workflows/cd.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: part-c-promotion
+  cancel-in-progress: false
+
+jobs:
+  dev:
+    name: DEV - Simulated deployment
+    runs-on: ubuntu-latest
+
+    outputs:
+      artifact_sha: ${{ steps.artifact.outputs.sha }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Identify immutable artifact
+        id: artifact
+        run: |
+          echo "sha=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Simulate DEV deployment
+        run: |
+          echo "Environment: DEV"
+          echo "Artifact: ${{ steps.artifact.outputs.sha }}"
+          echo "DRY RUN - No Azure deployment"
+
+  test:
+    name: TEST - Promotion validation
+    needs: dev
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate artifact
+        run: |
+          echo "Environment: TEST"
+          echo "Artifact: ${{ needs.dev.outputs.artifact_sha }}"
+          test -n "${{ needs.dev.outputs.artifact_sha }}"
+          echo "DRY RUN - Promotion validated"
+
+  prod:
+    name: PROD - Promotion validation
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate production promotion
+        run: |
+          echo "Environment: PROD"
+          echo "Artifact: ${{ github.sha }}"
+          echo "DRY RUN - No production deployment"
+          echo "Promotion simulation completed"

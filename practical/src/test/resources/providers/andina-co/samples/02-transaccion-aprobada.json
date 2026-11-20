@@ -1,0 +1,18 @@
+{
+  "notificacion_id": "ntf-8f1c2a77",
+  "fecha_notificacion": "2026-11-28T14:03:11-05:00",
+  "transaccion": {
+    "id": "TRX-CO-5521907",
+    "estado": "APROBADA",
+    "valor": "185000.00",
+    "moneda": "COP",
+    "referencia": "POL-CO-000187342",
+    "medio_pago": "PSE",
+    "fecha_transaccion": "2026-11-28T14:03:09-05:00",
+    "pagador": {
+      "nombre": "Laura Gómez",
+      "documento": "CC 1020304050",
+      "correo": "laura.gomez@example.com"
+    }
+  }
+}
