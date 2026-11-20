@@ -13,7 +13,7 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "const CryptoJS = pm.require('npm:crypto-js@4.2.0');",
+              "const CryptoJS = require('crypto-js');",
               "const t = Math.floor(Date.now()/1000).toString();",
               "const raw = pm.request.body.raw;",
               "const hmac = CryptoJS.HmacSHA256(t+'.'+raw, pm.environment.get('quetzalSecret')).toString(CryptoJS.enc.Hex);",
@@ -59,7 +59,7 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "const CryptoJS = pm.require('npm:crypto-js@4.2.0');",
+              "const CryptoJS = require('crypto-js');",
               "const t = Math.floor(Date.now()/1000).toString();",
               "const raw = pm.request.body.raw;",
               "const hmac = CryptoJS.HmacSHA256(t+'.'+raw, pm.environment.get('quetzalSecret')).toString(CryptoJS.enc.Hex);",
@@ -105,7 +105,7 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "const CryptoJS = pm.require('npm:crypto-js@4.2.0');",
+              "const CryptoJS = require('crypto-js');",
               "const t = Math.floor(Date.now()/1000).toString();",
               "const raw = pm.request.body.raw;",
               "const hmac = CryptoJS.HmacSHA256(t+'.'+raw, pm.environment.get('quetzalSecret')).toString(CryptoJS.enc.Hex);",
@@ -151,7 +151,7 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "const CryptoJS = pm.require('npm:crypto-js@4.2.0');",
+              "const CryptoJS = require('crypto-js');",
               "const ts = new Date().toISOString();",
               "const raw = pm.request.body.raw;",
               "const hmac = CryptoJS.HmacSHA256(ts+'.'+raw, pm.environment.get('andinaSecret')).toString(CryptoJS.enc.Base64);",
@@ -198,7 +198,7 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "const CryptoJS = pm.require('npm:crypto-js@4.2.0');",
+              "const CryptoJS = require('crypto-js');",
               "const ts = new Date().toISOString();",
               "const raw = pm.request.body.raw;",
               "const hmac = CryptoJS.HmacSHA256(ts+'.'+raw, pm.environment.get('andinaSecret')).toString(CryptoJS.enc.Base64);",
@@ -245,7 +245,7 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "const CryptoJS = pm.require('npm:crypto-js@4.2.0');",
+              "const CryptoJS = require('crypto-js');",
               "const ts = new Date().toISOString();",
               "const raw = pm.request.body.raw;",
               "const hmac = CryptoJS.HmacSHA256(ts+'.'+raw, pm.environment.get('andinaSecret')).toString(CryptoJS.enc.Base64);",
@@ -292,7 +292,7 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "const CryptoJS = pm.require('npm:crypto-js@4.2.0');",
+              "const CryptoJS = require('crypto-js');",
               "const ts = new Date().toISOString();",
               "const raw = pm.request.body.raw;",
               "const hmac = CryptoJS.HmacSHA256(ts+'.'+raw, pm.environment.get('andinaSecret')).toString(CryptoJS.enc.Base64);",
