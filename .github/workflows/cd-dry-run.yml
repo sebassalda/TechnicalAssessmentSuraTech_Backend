@@ -7,6 +7,7 @@ on:
     branches:
       - develop
     paths:
+      - ".github/workflows/cd-dry-run.yml"
       - ".github/workflows/cd.yml"
   workflow_dispatch:
 
