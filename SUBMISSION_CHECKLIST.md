@@ -3,14 +3,14 @@
 Tick every item before you send your repository URL. Missing items are scored as missing.
 
 ## General
-- [ ] `SUBMISSION.md` completed (including the final commit SHA you will send to your recruiter)
+- [x] `SUBMISSION.md` completed (including the final commit SHA you will send to your recruiter)
 - [x] `AI_USAGE.md` completed
 - [x] `docs/ASSUMPTIONS.md` lists every assumption you made
 - [x] No secrets, tokens or real personal data anywhere in the repository or its history
 - [x] Repository is **public**
 
 ## Part A — Integration and data design
-- [ ] `docs/design/SOLUTION_DESIGN.md` (context diagram, sequence diagram, canonical event and mapping, idempotency and ordering, error handling, capacity, data, FR7)
+- [x] `docs/design/SOLUTION_DESIGN.md` (context diagram, sequence diagram, canonical event and mapping, idempotency and ordering, error handling, capacity, data, FR7)
 - [x] `docs/adr/0001-*.md` — Integration with Salesforce
 - [x] `docs/adr/0002-*.md` — Implementation stack and data store
 - [x] `docs/adr/0003-*.md` — optional
