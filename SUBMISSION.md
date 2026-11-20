@@ -8,7 +8,7 @@
 | Field | Value |
 |---|---|
 | Candidate ID | sebas.saldarriaga.v@gmail.com |
-| Final commit SHA | TO BE COMPLETED |
+| Submission baseline commit SHA | `88114fbaaa7bc53a2ed6c471b83bbad12bdcc517` |
 | Submission date | November 20, 2026 |
 | Time spent | 18 hrs |
 
