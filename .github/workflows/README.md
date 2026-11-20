@@ -16,3 +16,20 @@ Manual workflow with sequential `dev → test → prod` jobs and GitHub Environm
 For a future real CD, configure per-environment `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` as GitHub Environment variables; configure GitHub Environments protection/required reviewers; create Azure federated identity credentials scoped to each environment, with distinct least-privilege principals. Use remote Terraform state with secure locking and separate state per environment/country, review saved plan artifacts, and deploy images by immutable digest. Never store Azure client secrets or Terraform state in Git.
 
 **Important:** Terraform currently defines a Container App but does not provision PostgreSQL, registry authentication, or Key Vault secret references. It is not deploy-ready. Part B publishes to a stub broker, not real Service Bus. Do not enable CD without closing these gaps.
+
+### Continuous Delivery Validation
+
+The CD dry-run workflow was successfully executed in GitHub Actions.
+
+**Validation results:**
+- DEV — Simulated deployment: Passed
+- TEST — Promotion validation: Passed
+- PROD — Promotion validation: Passed
+- Overall workflow status: Success
+- Total execution time: 21 seconds
+
+The workflow validates sequential job execution and simulated artifact promotion without provisioning Azure resources.
+
+The production CD design remains disabled to comply with the assessment's no-deployment requirement.
+
+**Limitations:** This dry run does not validate actual Azure authentication, infrastructure provisioning, container deployment, environment approvals, or rollback execution.
