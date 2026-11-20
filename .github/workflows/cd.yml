@@ -1,0 +1,40 @@
+name: CD - promotion design (non-deploying)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: part-c-promotion
+  cancel-in-progress: false
+jobs:
+  dev:
+    if: ${{ false }} # Part C expressly forbids deployment; enable only after authorized production readiness review.
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+      - name: Authenticate to Azure with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Planned promotion controls
+        run: echo 'Review Terraform plan, immutable image digest, SBOM, tests, and smoke checks before an authorized deployment.'
+  test:
+    if: ${{ false }}
+    needs: dev
+    runs-on: ubuntu-latest
+    environment: test
+    steps:
+      - name: Planned integration gates
+        run: echo 'Require dev approval, test environment approval, integration tests, replay and rollback review.'
+  prod:
+    if: ${{ false }}
+    needs: test
+    runs-on: ubuntu-latest
+    environment: prod
+    steps:
+      - name: Planned production gates
+        run: echo 'Require protected production approval, change record, reviewed plan, monitored rollout and rollback.'
