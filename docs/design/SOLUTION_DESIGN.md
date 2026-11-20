@@ -33,7 +33,7 @@ flowchart TB
             subgraph WORKER["Salesforce Worker Service - Azure Container Apps"]
                 EVENT_CONSUMER["Payment Event Consumer"]
                 PROCESSOR["Ordering, Idempotency and Batching"]
-                SF_CLIENT["Salesforce REST Adapter"]
+                SF_CLIENT["Salesforce Integration Adapter"]
                 WORKER_PUBLISHER["Result Outbox Publisher"]
             end
 
@@ -43,6 +43,7 @@ flowchart TB
             MON["Azure Monitor / Application Insights"]
         end
 
+        GATEWAY["Approved Enterprise Integration Gateway"]
         SF["Salesforce - System of Record"]
         FIN["Finance Consumer"]
         NOTIF["Notifications Consumer"]
@@ -64,7 +65,8 @@ flowchart TB
     EVENT_CONSUMER --> PROCESSOR
     PROCESSOR <-->|"Processing State and Results"| WORKER_DB
     PROCESSOR --> SF_CLIENT
-    SF_CLIENT -->|"HTTPS REST Upsert / OAuth2"| SF
+    SF_CLIENT -->|"Authorized Integration Request"| GATEWAY
+    GATEWAY -->|"Salesforce REST Upsert / OAuth2"| SF
 
     PAYMENT_BUS -->|"Finance Subscription"| FIN
     PAYMENT_BUS -->|"Notifications Subscription"| NOTIF
@@ -123,7 +125,7 @@ Its main responsibilities include:
 - Managing transient failures, retries, dead-letter handling, and processing outcomes.
 - Persisting processing results and publishing operational status events through a recoverable Outbox mechanism.
 
-Salesforce remains the system of record for payment and policy information. The integration updates payment records only; policy reinstatement is handled by existing Salesforce automation.
+Salesforce remains the system of record for payment and policy information. The integration updates payment records only; policy reinstatement is handled by existing Salesforce automation. For Quetzal partial refunds, the canonical event retains the refunded amount; the final Salesforce status and automation behavior require a documented business rule because the supplied Salesforce status model does not distinguish partial from full refunds.
 
 **Data Ownership and Operational Visibility**
 
@@ -169,7 +171,7 @@ The architecture defines three primary trust boundaries:
 
 Payment providers communicate with Meridian through HTTPS webhooks exposed by the existing API Manager.
 
-Each provider's webhook adapter validates the corresponding HMAC signature, timestamp tolerance, and required request fields before accepting the notification.
+Each provider adapter verifies the HMAC signature over the exact raw request bytes using the documented provider-specific encoding and signed input. Quetzal uses a signed Unix timestamp with a mandatory 300-second tolerance and supports multiple signatures during secret rotation; Andina signs its ISO-8601 timestamp and raw body and the design enforces its recommended 10-minute tolerance; Austral signs only the raw body and uses durable event-ID deduplication for replay defense. All signatures are compared in constant time. Required request fields and supported business events are validated before acceptance.
 
 Invalid or unauthenticated notifications are rejected without producing canonical payment events.
 
@@ -477,7 +479,7 @@ Events are ordered **per payment**, not globally. The Worker uses the provider p
 
 All timestamps are normalized to UTC. For a given payment, an event with an earlier authoritative state-change time than the last accepted state is recorded as `SKIPPED_STALE` and must not update Salesforce. A later valid reversal/refund supersedes an earlier capture. `Pending` must not overwrite a terminal state. `Failed` must not overwrite a later capture or refund. Equal timestamps with different states, invalid lifecycle transitions, or conflicting provider evidence are marked `RECONCILIATION_REQUIRED` rather than resolved by arrival order or a blanket numerical status rank.
 
-The Worker compares and reserves the next valid state under the per-payment lock, then performs the Salesforce upsert through the approved enterprise integration path. A retry or reconciliation is required when the remote result is uncertain. The Worker must not release an earlier unresolved operation in a way that permits a later operation to be overwritten by a delayed retry. Salesforce `Status_Changed_At__c` and `Last_Event_Id__c` provide audit evidence, but the Worker remains responsible for state-transition checks; Salesforce's external-ID upsert alone does not implement ordering.
+The Worker compares and reserves the next valid state under the per-payment lock, then performs the Salesforce upsert through the approved enterprise integration path. A durable per-payment `IN_FLIGHT` reservation (including an expiring lease, operation ID, target state and event ID) prevents another Worker replica from issuing a newer write until the earlier operation is confirmed or reconciled. An expired lease is not evidence that Salesforce did not apply the request. A retry or reconciliation is required when the remote result is uncertain. The Worker must not release an earlier unresolved operation in a way that permits a later operation to be overwritten by a delayed retry. Before replaying any timed-out operation, it compares the remote `Status_Changed_At__c` and `Last_Event_Id__c` with the intended transition. This guards against late retries initiated by this Worker, but a strict remote compare-and-set guarantee would require Salesforce-side conditional enforcement not specified in the assessment. Salesforce `Status_Changed_At__c` and `Last_Event_Id__c` provide audit evidence, but the Worker remains responsible for state-transition checks; Salesforce's external-ID upsert alone does not implement ordering.
 
 ### 2.5 Retry, Dead-Letter and Replay Policy
 
@@ -507,10 +509,243 @@ The source workload is approximately 15,000 notifications/day normally and 120,0
 
 Salesforce allows up to 200 records in one collection upsert request, counted as one API call. The design uses a **target batch size of 100 records**, with a maximum wait of **2 seconds** for a ready batch; it flushes smaller batches to protect latency. This is a starting configuration, not a promise of 100-record occupancy during normal traffic. At 100 records per call, the theoretical month-end volume requires about `ceil(116,400 / 100) = 1,164` successful batch calls/day, excluding retries, reads, and reconciliation. In the worst case of one upsert per unique event, the same workload needs approximately 116,400 write calls/day, leaving only 33,600 calls for retries and other integration operations within the 150,000-call allocation. Batching is therefore essential for resilience and headroom, not merely cost optimization.
 
-During a 40/second burst, 100-record batches would require roughly 0.4 Salesforce requests/second if batches fill. Using the documented p95 batch latency of 4 seconds, the average in-flight concurrency at that rate is approximately 1.6 requests; this is well below the maximum 25, but actual concurrency must be bounded across all Worker replicas. A conservative initial **global** Salesforce request cap of 10 concurrent calls and a rolling 24-hour request counter are proposed, with a reserve of at least 20% of the allocated budget for retries, reconciliation and operational traffic. These values are configuration choices and must be tested under partial failures.
+During a 40/second burst, 100-record batches would require roughly 0.4 Salesforce requests/second **if batches fill**. With the proposed 2-second flush interval, a sustained 40/second stream yields at most approximately 80 records per batch before deduplication; therefore 0.4 requests/second is a best-case batching illustration, not the expected measured rate. Using the documented p95 batch latency of 4 seconds, the average in-flight concurrency at that rate is approximately 1.6 requests; this is well below the maximum 25, but actual concurrency must be bounded across all Worker replicas. A conservative initial **global** Salesforce request cap of 10 concurrent calls and a rolling 24-hour request counter are proposed, with a reserve of at least 20% of the allocated budget for retries, reconciliation and operational traffic. These values are configuration choices and must be tested under partial failures.
 
 The Salesforce team reports approximately 97% monthly availability and outages lasting 5–90 minutes. Therefore, the requirements that 95% of payments be visible within 5 minutes and 99.5% within 1 hour are **targets to measure**, not guarantees that can be met during every outage: a 90-minute complete outage makes the one-hour target impossible for notifications received near its beginning. The architecture minimizes controllable latency and supports catch-up, while reporting unavoidable upstream dependency breaches explicitly rather than masking them.
 
 For illustration, a 90-minute outage at the **average month-end rate** accumulates approximately `120,000 / 86,400 × 5,400 ≈ 7,500` incoming notifications. At a sustained 40/second rate, 15 minutes contributes 36,000 deliveries. The queue and Outbox retention must safely hold these backlogs plus retry overhead. With 100-record batches, 36,000 unique records represent roughly 360 collection upsert requests, ignoring duplicates and retries. At a conservative 2 requests/second after recovery, that workload could be submitted in about 3 minutes, **excluding** record-level failures, upstream gateway overhead, and competing traffic. This is an illustrative throughput calculation, not a measured recovery guarantee.
 
 Per-country dashboards track the elapsed time from the provider's event notification to confirmed Salesforce recording, with p95 and p99.5 freshness, accepted-but-unpublished Outbox age, Service Bus backlog age, success/failure/reconciliation counts, API call consumption, and DLQ depth. Load tests must reproduce the 40/second burst, normal month-end volume, Salesforce 5–90-minute outages, `REQUEST_LIMIT_EXCEEDED`, duplicate redelivery, and out-of-order refunds. Results and measured SLO compliance belong in the operational documentation.
+
+
+## 3. Canonical Payment Event and Provider Mapping
+
+### 3.1 Canonical Event Contract
+
+The solution defines a versioned canonical payment event that decouples provider-specific webhook payloads from Salesforce, Finance, and Notifications consumers.
+
+Each accepted business event is transformed into a consistent representation before being persisted in the Intake Outbox and published to Azure Service Bus.
+
+The canonical event contains the following fields:
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `eventId` | UUID string | Yes | Unique identifier generated for the canonical event. |
+| `schemaVersion` | string | Yes | Contract version, initially `1.0`. |
+| `eventType` | string | Yes | Canonical event type: `premium.payment.updated`. |
+| `provider` | string | Yes | `Quetzal`, `Andina`, or `Austral`. |
+| `country` | string | Yes | ISO country code: `MX`, `CO`, or `CL`. |
+| `providerEventId` | string | Yes | Original provider notification or event identifier. |
+| `providerPaymentId` | string | Yes | Original charge, transaction, or payment identifier. |
+| `paymentKey` | string | Yes | Stable, country-prefixed payment identifier used for Salesforce upserts. |
+| `idempotencyKey` | string | Yes | Provider-specific business event deduplication key. |
+| `policyReference` | string | Yes | Meridian policy number associated with the payment. |
+| `status` | string | Yes | `Pending`, `Captured`, `Failed`, or `Refunded`. |
+| `originalStatus` | string | Yes | Original provider event type or payment state. |
+| `amount.value` | decimal string | Yes | Payment amount expressed in major currency units. |
+| `amount.currency` | string | Yes | ISO 4217 currency code. |
+| `occurredAt` | ISO 8601 string | Yes | Provider's authoritative payment state-change timestamp, normalized to UTC. |
+| `receivedAt` | ISO 8601 string | Yes | Time the notification was received by Meridian, normalized to UTC. |
+| `correlationId` | string | Yes | Identifier used for distributed tracing and operational investigation. |
+| `metadata.refundedAmount` | decimal string | No | Amount refunded, when supplied by the provider. |
+| `metadata.reasonCode` | string | No | Provider failure or reversal reason, when available. |
+
+The canonical contract excludes payer names, national identification numbers, email addresses, payment tokens, and other unnecessary personal or sensitive information.
+
+Amounts are represented as decimal strings to preserve precision and prevent floating-point rounding errors.
+
+All monetary values are normalized to major currency units. Currency codes are uppercase ISO 4217 values, and timestamps are normalized to UTC.
+
+### 3.2 Provider Field Mapping
+
+The following mappings are derived from the provider webhook specifications and supplied sample payloads.
+
+| Canonical field | Quetzal — Mexico | Andina — Colombia | Austral — Chile |
+|---|---|---|---|
+| `provider` | `Quetzal` | `Andina` | `Austral` |
+| `country` | `MX` | `CO` | `CL` |
+| `providerEventId` | `id` | `notificacion_id` | `eventId` |
+| `providerPaymentId` | `data.charge.id` | `transaccion.id` | `payment.paymentId` |
+| `paymentKey` | `MX:{data.charge.id}` | `CO:{transaccion.id}` | `CL:{payment.paymentId}` |
+| `idempotencyKey` | `Quetzal:{id}` | `Andina:{transaccion.id}:{transaccion.estado}` | `Austral:{eventId}` |
+| `policyReference` | `data.charge.reference` | `transaccion.referencia` | `payment.policyNumber` |
+| `originalStatus` | `type` | `transaccion.estado` | `eventType` |
+| `amount.value` | `data.charge.amount / 100` | `transaccion.valor` | `payment.amount` |
+| `amount.currency` | Uppercase `data.charge.currency` | `transaccion.moneda` | `payment.currency` |
+| `occurredAt` | `paid_at`, `refunded_at`, or `created`, according to the event type | `transaccion.fecha_transaccion` | `payment.occurredAt` |
+| `metadata.refundedAmount` | `data.charge.amount_refunded / 100` | Not supplied | Not supplied |
+| `metadata.reasonCode` | `data.charge.failure_code` | `transaccion.motivo_reverso` | Not supplied |
+
+The `receivedAt`, `eventId`, and `correlationId` fields are generated or assigned by Meridian's integration components.
+
+For Quetzal, `created` is expressed in Unix seconds. The more specific `paid_at` and `refunded_at` timestamps take precedence for their corresponding transitions.
+
+For Andina, `fecha_notificacion` represents a delivery attempt and must not be used to determine the payment's business ordering. `fecha_transaccion` is authoritative.
+
+For Austral, `sentAt` represents event delivery timing, while `payment.occurredAt` identifies the business state-change time.
+
+### 3.3 Provider State Normalization
+
+| Provider | Original state or event | Canonical status |
+|---|---|---|
+| Quetzal | `charge.succeeded` | `Captured` |
+| Quetzal | `charge.failed` | `Failed` |
+| Quetzal | `charge.refunded` | `Refunded` |
+| Andina | `PENDIENTE` | `Pending` |
+| Andina | `APROBADA` | `Captured` |
+| Andina | `RECHAZADA` | `Failed` |
+| Andina | `REVERSADA` | `Refunded` |
+| Austral | `PAYMENT_CONFIRMED` | `Captured` |
+| Austral | `PAYMENT_REJECTED` | `Failed` |
+| Austral | `PAYMENT_REVERSED` | `Refunded` |
+
+The normalization layer preserves the original provider state while exposing a consistent business status to downstream consumers.
+
+Unknown states are not automatically mapped to an existing canonical status. They are classified as unsupported and routed for investigation.
+
+A `Refunded` event must not be overwritten by an earlier `Captured` event. Likewise, a late `Pending` event must not replace an already confirmed or reversed payment state.
+
+These ordering guarantees are enforced by the Salesforce Worker using the strategy defined in Section 2.4.
+
+### 3.4 Monetary Normalization
+
+The provider adapters must apply currency-specific normalization before publishing canonical events.
+
+**Quetzal — MXN**
+
+Quetzal provides amounts in minor currency units. The adapter divides the integer amount by 100 using exact decimal arithmetic.
+
+For example:
+
+`125000` → `"1250.00"` MXN.
+
+The same conversion applies to `amount_refunded`. A partial refund must be identified by comparing the normalized refunded amount with the original charge amount. Since Salesforce exposes only `Refunded` and no `PartiallyRefunded` status, partial refunds require a business decision from the Salesforce/policy owners before the Worker changes `Status__c`; such events remain durably recorded and are marked `RECONCILIATION_REQUIRED` pending that decision. They must not automatically trigger the full-refund policy automation.
+
+**Andina — COP**
+
+Andina provides amounts as decimal strings in major currency units.
+
+For example:
+
+`"185000.00"` → `"185000.00"` COP.
+
+No division is required.
+
+**Austral — CLP**
+
+Austral provides amounts as integer strings in major currency units because CLP has no minor unit.
+
+For example:
+
+`"45990"` → `"45990"` CLP.
+
+No division is required.
+
+The integration must not convert monetary amounts using binary floating-point arithmetic.
+
+### 3.5 Salesforce Field Mapping
+
+The Salesforce Worker maps the canonical event into the `Premium_Payment__c` object.
+
+| Salesforce field | Canonical source |
+|---|---|
+| `Payment_Key__c` | `paymentKey` |
+| `Policy__r.Policy_Number__c` | `policyReference` |
+| `Amount__c` | `amount.value` |
+| `CurrencyIsoCode` | `amount.currency` |
+| `Status__c` | `status` |
+| `Provider__c` | `provider` |
+| `Provider_Transaction_Id__c` | `providerPaymentId` |
+| `Status_Changed_At__c` | `occurredAt` |
+| `Last_Event_Id__c` | `providerEventId` |
+
+The Worker uses `Payment_Key__c` as the unique external identifier for idempotent upserts.
+
+The policy relationship is resolved through `Policy__r.Policy_Number__c`, without requiring the integration to manage Salesforce internal record identifiers.
+
+The integration must never directly update `Policy__c.Status__c`.
+
+Salesforce automation remains responsible for policy reinstatement or suspension following a payment capture or refund.
+
+If the referenced policy does not exist, the Salesforce request fails and the event is routed to the documented remediation process.
+
+### 3.6 Contract Versioning and Compatibility
+
+The canonical event initially uses schema version `1.0`.
+
+Backward-compatible changes may introduce optional fields without changing the meaning of existing fields.
+
+Breaking changes, including renamed mandatory fields, incompatible data types, or modified business semantics, require a new major contract version.
+
+Consumers must validate the schema version and reject or quarantine unsupported major versions.
+
+The JSON Schema is maintained in:
+
+`docs/api/events/premium-payment.schema.json`
+
+The schema is the authoritative machine-readable contract used by automated validation and contract tests.
+
+Provider-specific adapters may evolve independently without requiring downstream changes, provided that the canonical contract remains compatible.
+
+
+## 4. Persistence Model, Indexing and Retention
+
+### 4.1 Persistence Boundaries
+
+PostgreSQL is selected for transactional outbox consistency, uniqueness enforcement, operational queries, and per-payment state coordination. The two services use separate logical databases and credentials; neither service reads the other service's database. The schemas below are **proposed implementation models**, not existing Salesforce or provider schemas. All timestamps are stored as `TIMESTAMPTZ` in UTC. UUIDs are generated by Meridian.
+
+### 4.2 Intake Database
+
+| Table | Key fields and purpose | Constraints and indexes |
+|---|---|---|
+| `webhook_notification` | `id UUID PK`, `provider`, `country`, `provider_event_id`, `provider_payment_id`, `notification_business_key`, `payment_key`, `canonical_event_id UUID`, `payload_hash`, `received_at`, `occurred_at`, `acceptance_status`, `correlation_id` | `UNIQUE(provider, notification_business_key)`; indexes on `(provider, provider_event_id)`, `(provider, provider_payment_id)`, `(payment_key, received_at DESC)`, `(received_at)` |
+| `intake_outbox` | `id UUID PK`, `aggregate_key`, `event_id UUID`, `event_type`, `schema_version`, `payload JSONB`, `state`, `attempt_count`, `next_attempt_at`, `published_at`, `created_at` | `UNIQUE(event_id)`; partial index on `(next_attempt_at, created_at)` where `state = 'PENDING'`; index on `aggregate_key` |
+| `notification_status` | `canonical_event_id UUID PK`, `notification_id UUID FK`, `provider`, `provider_event_id`, `provider_payment_id`, `payment_key`, `status`, `salesforce_status`, `last_error_code`, `last_updated_at`, `correlation_id`, `result_version` | indexes on `(provider, provider_event_id)`, `(provider, provider_payment_id)`, `(status, last_updated_at)`, `(payment_key)` |
+| `processed_result_event` | `result_event_id UUID PK`, `canonical_event_id`, `processed_at` | Unique `result_event_id` to suppress duplicate result messages |
+
+A single local transaction inserts `webhook_notification` and `intake_outbox`; the initial operational projection is created in the same transaction. Repeated deliveries do not create new canonical events. If a provider changes the delivery identifier between attempts, that identifier is recorded in a separate `webhook_delivery_attempt` table (`id`, `notification_id`, `provider_delivery_id`, `received_at`, `payload_hash`, `result`) so Operations can search any attempt without weakening business-event deduplication. Store only an allowlisted, redacted representation or a digest of the original payload; do not persist unnecessary payer PII.
+
+Outbox publishers claim rows using `FOR UPDATE SKIP LOCKED` in short transactions and use a claim lease or state transition to avoid concurrent publication. Publication and database marking are not atomic; consumers remain idempotent.
+
+### 4.3 Salesforce Worker Database
+
+| Table | Key fields and purpose | Constraints and indexes |
+|---|---|---|
+| `payment_processing_state` | `payment_key TEXT PK`, `provider`, `current_status`, `current_occurred_at`, `last_canonical_event_id`, `last_provider_event_id`, `salesforce_status`, `operation_id`, `lease_expires_at`, `updated_at` | Primary-key locking for per-payment serialization; index on `(salesforce_status, updated_at)` |
+| `processed_payment_event` | `consumer_name`, `canonical_event_id`, `payment_key`, `event_status`, `occurred_at`, `processing_status`, `retry_count`, `next_attempt_at`, `failure_category`, `last_error_code`, `reconciliation_required`, `correlation_id` | `PRIMARY KEY(consumer_name, canonical_event_id)`; index on `(processing_status, next_attempt_at)`; index on `(payment_key, occurred_at DESC)` |
+| `worker_outbox` | `id UUID PK`, `event_id UUID`, `canonical_event_id`, `payload JSONB`, `state`, `attempt_count`, `next_attempt_at`, `published_at`, `created_at` | `UNIQUE(event_id)`; partial index on `(next_attempt_at)` where `state = 'PENDING'` |
+| `replay_audit` | `id UUID PK`, `canonical_event_id`, `requested_by`, `reason`, `requested_at`, `outcome`, `correlation_id` | index on `(canonical_event_id, requested_at DESC)` |
+
+The Worker first persists its claim/reservation, then performs an external integration call, then commits the outcome and corresponding result Outbox event together. A crash or timeout between the remote write and the local outcome requires reconciliation by Salesforce external payment key. For composite upserts with `allOrNone: false`, each record result is recorded independently; one failed record must not cause successful records to be resent blindly.
+
+### 4.4 Retention, Recovery and Cost
+
+**Proposed retention settings, subject to Meridian's legal and operational approval:** retain notification metadata and operational statuses for 90 days; retain processed-event deduplication records and replay audit for at least 90 days; retain published Outbox entries for 7 days after confirmed publication; retain dead-letter and unresolved reconciliation records until remediation, with a 90-day review and no automatic deletion of unresolved work. Preserve deduplication tombstones for at least the longest provider retry window (Quetzal: 3 days) and for the full operational replay window. Do not expire deduplication state while its corresponding event remains replayable.
+
+Partition `webhook_notification`, `webhook_delivery_attempt`, and high-volume historical event tables monthly by `received_at` only when measurement justifies the operational complexity; start with indexed PostgreSQL tables. Use managed PostgreSQL backups and point-in-time recovery, Service Bus dead-lettering, and Azure Monitor alerts. Azure Container Apps consumption-based scaling and Service Bus managed messaging avoid always-on VM or Kubernetes administration; two small relational databases and retained events are the main recurring stateful costs. Cost assumptions and actual sizing must be validated against the selected Azure region and pricing tier.
+
+## 5. Operational Lookup, Security and Observability
+
+### 5.1 Operations API
+
+Operations accesses the Intake service **only through the existing API Manager**, using Meridian's OIDC/OAuth 2.0 identity provider and a dedicated least-privilege role such as `payments.operations.read`. No direct access to PostgreSQL, the Salesforce Worker, or raw logs is required.
+
+| Endpoint (proposed) | Purpose |
+|---|---|
+| `GET /api/v1/notifications?provider={provider}&providerEventId={id}` | Find by original notification/event identifier, including attempt IDs where applicable |
+| `GET /api/v1/notifications?provider={provider}&providerPaymentId={id}` | Find all notifications associated with a provider payment/transaction |
+| `GET /api/v1/notifications/{notificationId}` | Return one notification's lifecycle, timestamps, canonical event ID, correlation ID, and sanitized error information |
+| `GET /api/v1/payments/{paymentKey}/events` | List the payment's accepted, skipped, recorded, failed, and replayed transitions |
+| `POST /api/v1/operations/replays` | Request an audited replay; separate privileged `payments.operations.replay` role, with reason and event identifier |
+
+Queries are paginated and bounded. API Manager validates issuer, audience, expiry, and role claims; access is audited, rate-limited, and limited to necessary country scope when applicable. No personal identifiers, payment tokens, secrets, or raw payloads are returned.
+
+### 5.2 Lifecycle and Consistency
+
+The operational read model reports `RECEIVED`, `PUBLISHED`, `PROCESSING`, `RECORDED`, `RETRY_SCHEDULED`, `RECONCILIATION_REQUIRED`, `FAILED_PERMANENT`, `SKIPPED_STALE`, and `DEAD_LETTERED`. These are **internal processing statuses**, distinct from the four canonical payment business statuses. Results carry a monotonically increasing per-event processing version; the Intake projection applies only newer versions, so delayed result messages cannot regress the displayed status. The projection is eventually consistent with the Worker and must expose `lastUpdatedAt` and a freshness indicator.
+
+The end-to-end `correlationId` is propagated through API Manager, Intake, Outbox, Service Bus application properties, Worker, integration gateway, and result events. Telemetry includes provider and country, accepted/duplicate/rejected counts, queue and Outbox age, end-to-end Salesforce visibility latency, API usage and throttling, retry attempts, reconciliation backlog, and dead-letter depth. Logs and traces contain only approved identifiers and sanitized errors.
+
+### 5.3 Freshness Measurement and Alerts
+
+Measure freshness from Meridian's receipt of the provider notification until Salesforce confirms the payment write, using `receivedAt` and `recordedAt` in UTC. Report 5-minute and 1-hour compliance by country and globally, distinguishing dependency outages from controllable pipeline delay without excluding them from the observed metric. Alerts include pending Outbox age over 1 minute, oldest unrecorded accepted notification over 5 minutes, any DLQ message, unexpected authentication failures, approaching the shared Salesforce API budget, and sustained Service Bus backlog growth. Alert thresholds are initial design values subject to operational tuning.
