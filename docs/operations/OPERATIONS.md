@@ -14,6 +14,17 @@ Payments Integration owns webhook acceptance, durable event delivery, Salesforce
 
 SLO windows, exact paging thresholds and paging policy are proposed operating defaults and require production baselining. Measure freshness against the **original provider receipt time**, not only the consumer processing time. Exclude rejected unauthenticated requests from accepted-event durability denominator, but report them separately.
 
+## Alert routing and escalation (proposed)
+| Alert | Initial responder | Escalation |
+|---|---|---|
+| Payment freshness exceeds 5 minutes | Payments Integration on-call | Salesforce team |
+| DLQ growth or oldest-message age | Payments Integration on-call | Azure platform team |
+| Salesforce HTTP 400 surge | Payments Integration on-call | Salesforce team |
+| Persistence errors / durable intake failures | Payments Integration on-call | Database / platform team |
+| Salesforce API budget warning or breach risk | Payments Integration on-call | Salesforce integration owner |
+
+Alert thresholds, routing and escalation are **proposed operational defaults**, not contractual requirements; validate ownership and tune thresholds before production use.
+
 ## Instrumentation and tracing
 - Generate/propagate a `correlationId` at ingress through API Manager, verified webhook, canonical event, inbox/outbox, Service Bus message properties, consumer, Salesforce request and operational status record. Preserve provider IDs, idempotency key, country and event version as structured fields.
 - Record lifecycle timestamps (`receivedAt`, `persistedAt`, `publishedAt`, `salesforceRecordedAt`), state, attempt count, queue, DLQ reason and sanitized Salesforce error code. Expose an authenticated operational lookup by provider and transaction identifiers, with least-privilege access and audit trail (FR7).

@@ -6,7 +6,7 @@
 | Window | Action and rationale |
 |---|---|
 | 0–5 min | Acknowledge SEV-2, open incident channel, assign incident commander/comms lead, inform Colombia contact center and Salesforce on-call. Confirm affected customers and no direct policy-status edits. |
-| 5–10 min | Check `payments-co` DLQ and consumer traces against MX/CL; confirm 4,312 Colombian DLQ messages, 43,120 Salesforce 400 responses, near-empty active queue, zero signature failures. Identify first failure 2026-11-28 23:41 COT. |
+| 5–10 min | Check `payments-co` DLQ and consumer traces against MX/CL; confirm 4,312 Colombian DLQ messages, 43,120 Salesforce 400 responses, near-empty active queue, zero signature failures. Identify the first dead-lettered message at 2026-11-28 23:41 COT; investigate earlier processing failures in consumer logs and Salesforce error telemetry. |
 | 10–15 min | Sample sanitized DLQ errors and compare `referencia` with Salesforce `Policy__c.Policy_Number__c` external ID. Check if leading zeros, prefixes, country-specific normalization or missing policy records explain failures. Request Salesforce external-ID query and schema/mapping verification. |
 | 15–20 min | Prevent immediate retries for non-retryable 400 `INVALID_FIELD` errors; preserve DLQ and correlation IDs. Check integration budget (66% rolling 24h versus 38% baseline), suspend uncontrolled replay and establish safe rate limits. |
 | 20–25 min | Compare first failure with Friday v1.14.0 deployment and Saturday Salesforce change; inspect release diffs and reference-data availability. Validate a corrected lookup/mapping on masked samples in a non-production setting. |
