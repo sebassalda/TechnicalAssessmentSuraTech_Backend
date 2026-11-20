@@ -1,0 +1,89 @@
+openapi: 3.0.3
+info:
+  title: Meridian Premium Payment Webhooks
+  version: 1.0.0
+  description: Provider-specific raw-body HMAC verification is performed by the Intake Service.
+paths:
+  /api/v1/webhooks/quetzal:
+    post:
+      operationId: receiveQuetzal
+      summary: Quetzal Pagos (Mexico) webhook
+      parameters:
+        - in: header
+          name: Quetzal-Signature
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/QuetzalWebhook' }
+      responses:
+        '200': { description: Durably accepted or identical duplicate }
+        '400': { description: Invalid payload }
+        '401': { description: Invalid or expired signature }
+        '503': { description: Durable persistence unavailable; provider should retry }
+  /api/v1/webhooks/andina:
+    post:
+      operationId: receiveAndina
+      summary: Andina Pay (Colombia) webhook
+      parameters:
+        - in: header
+          name: X-Andina-Timestamp
+          required: true
+          schema: { type: string, format: date-time }
+        - in: header
+          name: X-Andina-Signature
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AndinaWebhook' }
+      responses:
+        '200': { description: Durably accepted or identical duplicate (Andina only accepts 200 or 204) }
+        '400': { description: Invalid payload }
+        '401': { description: Invalid or expired signature }
+        '503': { description: Durable persistence unavailable; provider should retry }
+components:
+  schemas:
+    QuetzalWebhook:
+      type: object
+      required: [id, type, created, data]
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [charge.succeeded, charge.failed, charge.refunded] }
+        created: { type: integer, format: int64 }
+        data:
+          type: object
+          required: [charge]
+          properties:
+            charge:
+              type: object
+              required: [id, amount, currency, reference]
+              properties:
+                id: { type: string }
+                amount: { type: integer, format: int64 }
+                amount_refunded: { type: integer, format: int64 }
+                currency: { type: string, enum: [mxn] }
+                reference: { type: string }
+                paid_at: { type: integer, format: int64, nullable: true }
+                refunded_at: { type: integer, format: int64, nullable: true }
+    AndinaWebhook:
+      type: object
+      required: [notificacion_id, fecha_notificacion, transaccion]
+      properties:
+        notificacion_id: { type: string }
+        fecha_notificacion: { type: string, format: date-time }
+        transaccion:
+          type: object
+          required: [id, estado, valor, moneda, referencia, fecha_transaccion]
+          properties:
+            id: { type: string }
+            estado: { type: string, enum: [PENDIENTE, APROBADA, RECHAZADA, REVERSADA] }
+            valor: { type: string, pattern: '^\d+\.\d{2}$' }
+            moneda: { type: string, enum: [COP] }
+            referencia: { type: string }
+            fecha_transaccion: { type: string, format: date-time }
+            motivo_reverso: { type: string }

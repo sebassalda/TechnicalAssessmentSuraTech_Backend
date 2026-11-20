@@ -1,0 +1,24 @@
+{
+  "id": "evt_01JDQ3P1C9T4",
+  "type": "charge.failed",
+  "api_version": "2025-06-01",
+  "created": 1795889400,
+  "data": {
+    "charge": {
+      "id": "ch_8Jm3Np0RqA",
+      "amount": 98000,
+      "currency": "mxn",
+      "status": "failed",
+      "failure_code": "insufficient_funds",
+      "reference": "POL-MX-000398110",
+      "paid_at": null,
+      "payment_method": {
+        "type": "card",
+        "token": "tok_qz_1aB7cD"
+      },
+      "customer": {
+        "email": "jorge.ramirez@example.com"
+      }
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "eventId": "aus_ev_93f0c1d2",
+  "eventType": "PAYMENT_CONFIRMED",
+  "sentAt": "2026-11-28T17:05:44Z",
+  "payment": {
+    "paymentId": "AUS-P-77120",
+    "amount": "45990",
+    "currency": "CLP",
+    "policyNumber": "POL-CL-000093311",
+    "occurredAt": "2026-11-28T17:05:40Z",
+    "payer": {
+      "name": "Camila Rojas",
+      "rut": "11.111.111-1",
+      "email": "camila.rojas@example.com"
+    }
+  }
+}
